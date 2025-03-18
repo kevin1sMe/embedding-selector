@@ -1,0 +1,3 @@
+[console_scripts]
+embedding-example = src.example:main
+embedding-test = src.test:main
