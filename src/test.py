@@ -37,6 +37,7 @@ def evaluate_model(model_name, api_base=None):
         start_time = time.time()
         
         # 为所有commit messages生成embedding
+        # 这里不需要传递max_samples，get_batch_embeddings方法已经实现了分批处理
         messages_embeddings = selector.get_batch_embeddings(COMMIT_MESSAGES)
         
         # 评估查询结果
@@ -101,7 +102,8 @@ def evaluate_model(model_name, api_base=None):
             "precision@3": precision_at_3,
             "precision@5": precision_at_5,
             "processing_time": elapsed_time,
-            "query_results": results
+            "query_results": results,
+            "data_size": len(COMMIT_MESSAGES)
         }
         
         return evaluation_result
@@ -122,7 +124,7 @@ def save_results(results, output_file="results.json"):
 def display_results_table(all_results):
     """以表格形式显示评估结果"""
     table_data = []
-    headers = ["模型", "Precision@1", "Precision@3", "Precision@5", "处理时间(秒)"]
+    headers = ["模型", "Precision@1", "Precision@3", "Precision@5", "处理时间(秒)", "数据量"]
     
     for result in all_results:
         if "error" in result:
@@ -131,7 +133,8 @@ def display_results_table(all_results):
                 "错误",
                 "错误",
                 "错误",
-                "错误"
+                "错误",
+                "N/A"
             ]
         else:
             row = [
@@ -139,7 +142,8 @@ def display_results_table(all_results):
                 f"{result['precision@1']:.4f}",
                 f"{result['precision@3']:.4f}",
                 f"{result['precision@5']:.4f}",
-                f"{result['processing_time']:.2f}"
+                f"{result['processing_time']:.2f}",
+                result.get("data_size", "全部")
             ]
         table_data.append(row)
     
@@ -149,24 +153,38 @@ def display_results_table(all_results):
 def main():
     # 要评估的LM Studio本地模型列表
     models_to_evaluate = [
-        "text-embedding-gte-large-zh",
-        "text-embedding-bge-large-zh-v1.5",
-        "text-embedding-m3e-base"
+        "hunyuan",
+        "doubao", 
+        "baichuan",
+        "qwen",
+        "baidu"
     ]
     
     # 保存所有结果
     all_results = []
     
     # 评估每个模型
-    for model in models_to_evaluate:
-        result = evaluate_model(model)
-        all_results.append(result)
+    print(f"开始评估 {len(models_to_evaluate)} 个模型...")
+    for i, model in enumerate(models_to_evaluate):
+        print(f"[{i+1}/{len(models_to_evaluate)}] 评估模型: {model}")
+        try:
+            result = evaluate_model(model)
+            all_results.append(result)
+            print(f"✓ {model} 评估完成")
+        except Exception as e:
+            print(f"✗ {model} 评估失败: {str(e)}")
+            all_results.append({
+                "model_name": model,
+                "error": str(e)
+            })
     
     # 显示结果表格
     display_results_table(all_results)
     
     # 保存详细结果
-    save_results(all_results)
+    save_results(all_results, "close-embeddings-test.json")
+    
+    print("\n评估已完成！详细结果已保存到 close-embeddings-test.json 文件")
 
 if __name__ == "__main__":
     main() 

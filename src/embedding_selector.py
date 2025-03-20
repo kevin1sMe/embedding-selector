@@ -3,6 +3,7 @@ import openai
 from dotenv import load_dotenv
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+import time
 
 # 加载环境变量
 load_dotenv()
@@ -13,44 +14,118 @@ class EmbeddingSelector:
     支持切换不同的模型和API端点
     """
     
+    # 提供商配置
+    PROVIDER_CONFIGS = {
+        "openai": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key": os.getenv("OPENAI_API_KEY")
+        },
+        "local": {
+            "base_url": os.getenv("LOCAL_API_BASE"), 
+            "api_key": os.getenv("LOCAL_API_KEY")
+        },
+        "custom": {
+            "base_url": os.getenv("CUSTOM_API_BASE"),
+            "api_key": os.getenv("CUSTOM_API_KEY")
+        }
+    }
+    
     # 预设可用的模型列表
     AVAILABLE_MODELS = {
         # OpenAI官方模型
         "text-embedding-ada-002": {
+            "description": "OpenAI第二代Ada嵌入模型",
+            "provider": "openai",
+            "name": "text-embedding-ada-002",
             "dimensions": 1536,
-            "description": "OpenAI第二代Ada嵌入模型"
+            "batch_size": 2048
         },
         "text-embedding-3-small": {
+            "description": "OpenAI第三代小型嵌入模型",
+            "provider": "openai",
+            "name": "text-embedding-3-small",
             "dimensions": 1536,
-            "description": "OpenAI第三代小型嵌入模型"
+            "batch_size": 2048
         },
         "text-embedding-3-large": {
+            "description": "OpenAI第三代大型嵌入模型",
+            "provider": "openai",
+            "name": "text-embedding-3-large",
             "dimensions": 3072,
-            "description": "OpenAI第三代大型嵌入模型"
+            "batch_size": 2048
         },
         
         # LM Studio本地模型
         "text-embedding-gte-large-zh": {
+            "description": "GTE大型中文嵌入模型（本地）",
+            "provider": "local",
+            "name": "text-embedding-gte-large-zh",
             "dimensions": 1024,
-            "description": "GTE大型中文嵌入模型（本地）"
+            "batch_size": 512
         },
         "text-embedding-bge-large-zh-v1.5": {
-            "dimensions": 1024, 
-            "description": "百度开源的中英双语大型嵌入模型（本地）"
+            "description": "百度开源的中英双语大型嵌入模型（本地）",
+            "provider": "local",
+            "name": "text-embedding-bge-large-zh-v1.5",
+            "dimensions": 1024,
+            "batch_size": 512
         },
         "text-embedding-m3e-base": {
+            "description": "M3E基础嵌入模型（本地）",
+            "provider": "local",
+            "name": "text-embedding-m3e-base",
             "dimensions": 768,
-            "description": "M3E基础嵌入模型（本地）"
+            "batch_size": 512
         },
         
         # 其他可能通过自定义API端点使用的模型
         "m3e-large": {
+            "description": "Moka开源的中英双语嵌入模型",
+            "provider": "custom",
+            "name": "m3e-large",
             "dimensions": 1024,
-            "description": "Moka开源的中英双语嵌入模型"
+            "batch_size": 512
+        },
+
+        # 新增模型
+        "hunyuan": {
+            "description": "腾讯混元嵌入模型",
+            "provider": "custom",
+            "name": "hunyuan-embedding",
+            "dimensions": 1024,
+            "batch_size": 8  # 保守估计
+        },
+        "doubao": {
+            "description": "豆包嵌入模型",
+            "provider": "custom",
+            "name": "doubao-embedding-large-text-240915",
+            "dimensions": 1024,
+            "batch_size": 16
+        },
+        "baichuan": {
+            "description": "百川嵌入模型",
+            "provider": "custom",
+            "name": "Baichuan-Text-Embedding",
+            "dimensions": 1024,
+            "batch_size": 16  # 错误信息显示最多16
+        },
+        "qwen": {
+            "description": "通义千问嵌入模型",
+            "provider": "custom",
+            "name": "text-embedding-v3",
+            "dimensions": 1024,
+            "batch_size": 10  # 错误信息显示最多10
+        },
+        "baidu": {
+            "description": "百度嵌入模型",
+            "provider": "custom",
+            "name": "Embedding-V1",
+            "dimensions": 1024,
+            "batch_size": 8  # 保守估计
         }
     }
     
-    def __init__(self, model_name="text-embedding-gte-large-zh", api_base=None, api_key=None):
+    def __init__(self, model_name, api_base=None, api_key=None):
         """
         初始化embedding选择器
         
@@ -58,19 +133,27 @@ class EmbeddingSelector:
             model_name: 要使用的模型名称
             api_base: API端点URL，如果为None则使用环境变量中的配置
             api_key: API密钥，如果为None则使用环境变量中的配置
-        """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("未设置API密钥，请在.env文件中设置OPENAI_API_KEY或在初始化时提供")
-        
-        # 设置API端点
-        self.api_base = api_base
-        if not self.api_base:
-            self.api_base = os.getenv("CUSTOM_API_BASE") or os.getenv("DEFAULT_API_BASE")
             
+        Raises:
+            ValueError: 当模型名称无效或API配置缺失时抛出
+        """
         # 设置模型
         self.set_model(model_name)
         
+        # 获取模型对应的提供商配置
+        provider = self.AVAILABLE_MODELS[model_name]["provider"]
+        provider_config = self.PROVIDER_CONFIGS[provider]
+        
+        # 设置API密钥
+        self.api_key = api_key or provider_config["api_key"]
+        if not self.api_key:
+            raise ValueError(f"未设置API密钥，请在初始化时提供或确保环境变量已正确配置")
+        
+        # 设置API端点
+        self.api_base = api_base or provider_config["base_url"]
+        if not self.api_base:
+            raise ValueError(f"未设置API端点，请在初始化时提供或确保环境变量已正确配置")
+            
         # 配置OpenAI客户端
         self.client = openai.OpenAI(
             api_key=self.api_key,
@@ -83,7 +166,10 @@ class EmbeddingSelector:
             raise ValueError(f"不支持的模型: {model_name}。可用模型: {list(self.AVAILABLE_MODELS.keys())}")
         
         self.model_name = model_name
+        # 为兼容性起见，使用模型的真实名称，而不是键
+        self.model_api_name = self.AVAILABLE_MODELS[model_name]["name"]
         self.dimensions = self.AVAILABLE_MODELS[model_name]["dimensions"]
+        self.batch_size = self.AVAILABLE_MODELS[model_name]["batch_size"]
         print(f"已设置模型为: {model_name} (维度: {self.dimensions})")
     
     def set_api_endpoint(self, api_base):
@@ -106,11 +192,22 @@ class EmbeddingSelector:
         Returns:
             embedding向量的numpy数组
         """
-        response = self.client.embeddings.create(
-            model=self.model_name,
-            input=text
-        )
-        return np.array(response.data[0].embedding)
+        try:
+            response = self.client.embeddings.create(
+                model=self.model_api_name,
+                input=text
+            )
+            
+            if response and response.data and len(response.data) > 0 and response.data[0].embedding:
+                return np.array(response.data[0].embedding)
+            else:
+                print(f"警告: 模型 {self.model_name} 返回了空的embedding")
+                # 返回一个全零向量作为替代
+                return np.zeros(self.dimensions)
+        except Exception as e:
+            print(f"获取embedding时出错: {str(e)}")
+            # 返回一个全零向量作为替代
+            return np.zeros(self.dimensions)
     
     def get_batch_embeddings(self, texts):
         """
@@ -122,11 +219,56 @@ class EmbeddingSelector:
         Returns:
             embedding向量列表的numpy数组
         """
-        response = self.client.embeddings.create(
-            model=self.model_name,
-            input=texts
-        )
-        return np.array([data.embedding for data in response.data])
+        all_embeddings = []
+        total_batches = (len(texts) + self.batch_size - 1) // self.batch_size
+        
+        print(f"处理 {len(texts)} 条文本，分为 {total_batches} 批 (每批最多 {self.batch_size} 条)")
+        
+        # 按照模型支持的批量大小分批处理
+        for i in range(0, len(texts), self.batch_size):
+            batch_texts = texts[i:i + self.batch_size]
+            batch_num = i // self.batch_size + 1
+            print(f"处理批次 {batch_num}/{total_batches} ({len(batch_texts)} 条文本)...")
+            
+            # 重试机制
+            max_retries = 3
+            retry_count = 0
+            
+            while retry_count < max_retries:
+                try:
+                    response = self.client.embeddings.create(
+                        model=self.model_api_name,
+                        input=batch_texts
+                    )
+                    
+                    if response and response.data:
+                        batch_embeddings = [data.embedding for data in response.data if data.embedding]
+                        
+                        # 如果存在空的embedding，用零向量填充
+                        if len(batch_embeddings) < len(batch_texts):
+                            print(f"警告: 模型 {self.model_name} 返回的embedding数量少于请求数量")
+                            for _ in range(len(batch_texts) - len(batch_embeddings)):
+                                batch_embeddings.append(np.zeros(self.dimensions))
+                                
+                        all_embeddings.extend(batch_embeddings)
+                        print(f"批次 {batch_num}/{total_batches} 处理完成")
+                        break  # 成功处理，跳出重试循环
+                    else:
+                        print(f"警告: 模型 {self.model_name} 返回了空响应")
+                        # 用零向量填充
+                        all_embeddings.extend([np.zeros(self.dimensions) for _ in batch_texts])
+                        break  # 即使是空响应也算完成，跳出重试循环
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        print(f"批次 {batch_num} 处理出错 (尝试 {retry_count}/{max_retries}): {str(e)}")
+                        time.sleep(2)  # 等待2秒后重试
+                    else:
+                        print(f"批量获取embedding时出错，达到最大重试次数: {str(e)}")
+                        # 用零向量填充
+                        all_embeddings.extend([np.zeros(self.dimensions) for _ in batch_texts])
+                
+        return np.array(all_embeddings)
     
     def calculate_similarity(self, embedding1, embedding2):
         """计算两个embedding之间的余弦相似度"""
