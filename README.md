@@ -27,6 +27,30 @@ embedding-selector/
 
 ## 快速开始
 
+### 使用Nix环境
+
+如果您使用Nix作为包管理器，可以使用项目中的`shell.nix`文件创建一个隔离的开发环境，它会自动解决所有系统依赖问题：
+
+```bash
+# 使用nix-shell启动一个带有所有依赖的shell环境
+nix-shell
+
+# 在nix-shell环境中，激活Python虚拟环境
+source .venv/bin/activate
+
+# 运行测试脚本
+python src/test.py
+```
+
+您也可以使用单行命令运行：
+
+```bash
+# 一步完成：启动nix-shell并运行Python脚本
+nix-shell --run 'source .venv/bin/activate && python src/test.py'
+```
+
+这种方法特别适合在不同的Linux发行版上避免系统库依赖问题，如`libstdc++`或`libz`等。
+
 ### 安装依赖
 
 推荐使用[uv](https://github.com/astral-sh/uv)进行依赖管理，它比pip更快、更可靠：

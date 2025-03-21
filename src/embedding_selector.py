@@ -93,14 +93,14 @@ class EmbeddingSelector:
             "provider": "custom",
             "name": "hunyuan-embedding",
             "dimensions": 1024,
-            "batch_size": 8  # 保守估计
+            "batch_size": 8  # 调整为8，已测试可行
         },
         "doubao": {
             "description": "豆包嵌入模型",
             "provider": "custom",
             "name": "doubao-embedding-large-text-240915",
             "dimensions": 1024,
-            "batch_size": 16
+            "batch_size":256 
         },
         "baichuan": {
             "description": "百川嵌入模型",
@@ -219,6 +219,7 @@ class EmbeddingSelector:
         Returns:
             embedding向量列表的numpy数组
         """
+        # 不再需要单独处理hunyuan模型，每个模型都使用其配置的batch_size
         all_embeddings = []
         total_batches = (len(texts) + self.batch_size - 1) // self.batch_size
         
@@ -229,6 +230,13 @@ class EmbeddingSelector:
             batch_texts = texts[i:i + self.batch_size]
             batch_num = i // self.batch_size + 1
             print(f"处理批次 {batch_num}/{total_batches} ({len(batch_texts)} 条文本)...")
+            
+            # 打印请求信息 - 诊断用
+            print(f"[诊断] 请求模型: {self.model_api_name}")
+            print(f"[诊断] 请求API端点: {self.api_base}")
+            print(f"[诊断] 请求批次大小: {len(batch_texts)}")
+            if len(batch_texts) > 0:
+                print(f"[诊断] 第一条文本示例: {batch_texts[0][:100]}...")
             
             # 重试机制
             max_retries = 3
@@ -241,12 +249,43 @@ class EmbeddingSelector:
                         input=batch_texts
                     )
                     
-                    if response and response.data:
-                        batch_embeddings = [data.embedding for data in response.data if data.embedding]
+                    # 打印响应信息 - 诊断用
+                    print(f"[诊断] 响应类型: {type(response)}")
+                    print(f"[诊断] 响应属性: {dir(response)}")
+                    print(f"[诊断] 响应对象内容: {response}")
+                    
+                    if hasattr(response, 'data'):
+                        print(f"[诊断] response.data类型: {type(response.data)}")
+                        print(f"[诊断] response.data长度: {len(response.data) if response.data else 'None'}")
+                        if response.data and len(response.data) > 0:
+                            print(f"[诊断] 第一个数据项类型: {type(response.data[0])}")
+                            print(f"[诊断] 第一个数据项属性: {dir(response.data[0])}")
+                            if hasattr(response.data[0], 'embedding'):
+                                print(f"[诊断] 第一个embedding类型: {type(response.data[0].embedding)}")
+                                print(f"[诊断] 第一个embedding长度: {len(response.data[0].embedding) if response.data[0].embedding else 'None'}")
+                            else:
+                                print("[诊断] 第一个数据项没有embedding属性")
+                    else:
+                        print("[诊断] 响应对象没有data属性")
+                    
+                    # 更严格地检查response及其属性
+                    if response and hasattr(response, 'data') and response.data:
+                        # 确保每个data对象都有embedding属性
+                        batch_embeddings = []
+                        for idx, data in enumerate(response.data):
+                            if hasattr(data, 'embedding') and data.embedding is not None:
+                                batch_embeddings.append(data.embedding)
+                            else:
+                                # 如果单个结果缺少embedding，用零向量替代
+                                print(f"警告: 数据项 {idx} 缺少embedding属性或为None，使用零向量替代")
+                                print(f"[诊断] 数据项 {idx} 的内容: {data}")
+                                print(f"[诊断] 数据项 {idx} 的属性: {dir(data)}")
+                                batch_embeddings.append(np.zeros(self.dimensions))
                         
                         # 如果存在空的embedding，用零向量填充
                         if len(batch_embeddings) < len(batch_texts):
                             print(f"警告: 模型 {self.model_name} 返回的embedding数量少于请求数量")
+                            print(f"[诊断] 返回数量: {len(batch_embeddings)}, 请求数量: {len(batch_texts)}")
                             for _ in range(len(batch_texts) - len(batch_embeddings)):
                                 batch_embeddings.append(np.zeros(self.dimensions))
                                 
@@ -260,8 +299,13 @@ class EmbeddingSelector:
                         break  # 即使是空响应也算完成，跳出重试循环
                 except Exception as e:
                     retry_count += 1
+                    print(f"批次 {batch_num} 处理出错 (尝试 {retry_count}/{max_retries}): {str(e)}")
+                    print(f"[诊断] 错误类型: {type(e)}")
+                    print(f"[诊断] 错误详情: {str(e)}")
+                    import traceback
+                    print(f"[诊断] 错误堆栈: {traceback.format_exc()}")
+                    
                     if retry_count < max_retries:
-                        print(f"批次 {batch_num} 处理出错 (尝试 {retry_count}/{max_retries}): {str(e)}")
                         time.sleep(2)  # 等待2秒后重试
                     else:
                         print(f"批量获取embedding时出错，达到最大重试次数: {str(e)}")

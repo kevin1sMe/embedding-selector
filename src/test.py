@@ -151,13 +151,24 @@ def display_results_table(all_results):
     print(tabulate(table_data, headers=headers, tablefmt="grid"))
 
 def main():
+    # 交互式获取输出文件名
+    default_filename = "embeddings-test-results.json"
+    print(f"\n请输入保存结果的文件名 (默认: {default_filename}):")
+    filename = input().strip()
+    if not filename:
+        filename = default_filename
+    
+    # 如果用户没有提供扩展名，添加.json扩展名
+    if not filename.endswith('.json'):
+        filename += '.json'
+    
     # 要评估的LM Studio本地模型列表
     models_to_evaluate = [
-        "hunyuan",
+        # "hunyuan",
         "doubao", 
-        "baichuan",
-        "qwen",
-        "baidu"
+        # "baichuan",
+        # "qwen",
+        # "baidu"
     ]
     
     # 保存所有结果
@@ -182,9 +193,9 @@ def main():
     display_results_table(all_results)
     
     # 保存详细结果
-    save_results(all_results, "close-embeddings-test.json")
+    save_results(all_results, filename)
     
-    print("\n评估已完成！详细结果已保存到 close-embeddings-test.json 文件")
+    print(f"\n评估已完成！详细结果已保存到 {filename} 文件")
 
 if __name__ == "__main__":
     main() 
