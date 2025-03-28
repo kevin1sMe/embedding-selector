@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 import numpy as np
 from tabulate import tabulate
 
-from embedding_selector import EmbeddingSelector
-from test_data import COMMIT_MESSAGES, TEST_QUERIES
+# 修复导入路径
+from src.core.embedding_selector import EmbeddingSelector
+from src.tests.test_data import COMMIT_MESSAGES, TEST_QUERIES
 
 # 加载环境变量
 load_dotenv()
@@ -60,7 +61,15 @@ def evaluate_model(model_name, api_base=None):
             
             # 记录Top-N结果
             top_results = []
-            for i, (message, score) in enumerate(similar_messages[:5]):
+            for i, item in enumerate(similar_messages[:5]):
+                # 适配新的find_most_similar返回格式
+                if isinstance(item, dict):
+                    message = item["text"]
+                    score = item["score"]
+                else:
+                    # 旧格式兼容
+                    message, score = item
+                
                 top_results.append({
                     "rank": i+1,
                     "message": message,
@@ -148,54 +157,4 @@ def display_results_table(all_results):
         table_data.append(row)
     
     print("\n模型评估结果:")
-    print(tabulate(table_data, headers=headers, tablefmt="grid"))
-
-def main():
-    # 交互式获取输出文件名
-    default_filename = "embeddings-test-results.json"
-    print(f"\n请输入保存结果的文件名 (默认: {default_filename}):")
-    filename = input().strip()
-    if not filename:
-        filename = default_filename
-    
-    # 如果用户没有提供扩展名，添加.json扩展名
-    if not filename.endswith('.json'):
-        filename += '.json'
-    
-    # 要评估的LM Studio本地模型列表
-    models_to_evaluate = [
-        # "hunyuan",
-        "doubao", 
-        # "baichuan",
-        # "qwen",
-        # "baidu"
-    ]
-    
-    # 保存所有结果
-    all_results = []
-    
-    # 评估每个模型
-    print(f"开始评估 {len(models_to_evaluate)} 个模型...")
-    for i, model in enumerate(models_to_evaluate):
-        print(f"[{i+1}/{len(models_to_evaluate)}] 评估模型: {model}")
-        try:
-            result = evaluate_model(model)
-            all_results.append(result)
-            print(f"✓ {model} 评估完成")
-        except Exception as e:
-            print(f"✗ {model} 评估失败: {str(e)}")
-            all_results.append({
-                "model_name": model,
-                "error": str(e)
-            })
-    
-    # 显示结果表格
-    display_results_table(all_results)
-    
-    # 保存详细结果
-    save_results(all_results, filename)
-    
-    print(f"\n评估已完成！详细结果已保存到 {filename} 文件")
-
-if __name__ == "__main__":
-    main() 
+    print(tabulate(table_data, headers=headers, tablefmt="grid")) 

@@ -1,5 +1,0 @@
-__init__
-embedding_selector
-example
-test
-test_data

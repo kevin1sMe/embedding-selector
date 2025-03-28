@@ -32,4 +32,22 @@ yarn-error.log*
 
 # Cache
 .cache/
-.next/ 
+.next/
+
+# Results
+results/*
+!results/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.env
+.venv
+venv/
+ENV/ 
+
+*.egg-info/
