@@ -1,13 +1,16 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量 - 确保从项目根目录加载.env文件
+project_root = Path(__file__).parent.parent.parent
+dotenv_path = project_root / '.env'
+load_dotenv(dotenv_path=dotenv_path)
 
 # 提供商配置
 PROVIDER_CONFIGS = {
     "openai": {
-        "base_url": os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1",
+        "base_url": os.getenv("DEFAULT_API_BASE") or "https://api.openai.com/v1",
         "api_key": os.getenv("OPENAI_API_KEY")
     },
     "local": {
@@ -20,29 +23,38 @@ PROVIDER_CONFIGS = {
     }
 }
 
+# 打印配置进行调试
+print(PROVIDER_CONFIGS)
+
 # 预设可用的模型列表
 AVAILABLE_MODELS = {
-    # OpenAI官方模型
+    # OpenAI官方模型（多语言支持）
     "text-embedding-ada-002": {
         "description": "OpenAI第二代Ada嵌入模型",
         "provider": "openai",
         "name": "text-embedding-ada-002",
         "dimensions": 1536,
-        "batch_size": 2048
+        "max_tokens": 8191,
+        "batch_size": 2048,
+        "languages": "多语言"
     },
     "text-embedding-3-small": {
         "description": "OpenAI第三代小型嵌入模型",
         "provider": "openai",
         "name": "text-embedding-3-small",
         "dimensions": 1536,
-        "batch_size": 2048
+        "max_tokens": 8191,
+        "batch_size": 2048,
+        "languages": "多语言"
     },
     "text-embedding-3-large": {
         "description": "OpenAI第三代大型嵌入模型",
         "provider": "openai",
         "name": "text-embedding-3-large",
         "dimensions": 3072,
-        "batch_size": 2048
+        "max_tokens": 8191,
+        "batch_size": 2048,
+        "languages": "多语言"
     },
     
     # LM Studio本地模型
@@ -51,28 +63,54 @@ AVAILABLE_MODELS = {
         "provider": "local",
         "name": "text-embedding-gte-large-zh",
         "dimensions": 1024,
-        "batch_size": 512
+        "max_tokens": 512,
+        "batch_size": 512,
+        "languages": "中文"
     },
     "text-embedding-bge-large-zh-v1.5": {
         "description": "百度开源的中英双语大型嵌入模型（本地）",
         "provider": "local",
         "name": "text-embedding-bge-large-zh-v1.5",
         "dimensions": 1024,
-        "batch_size": 512
+        "max_tokens": 512,
+        "batch_size": 512,
+        "languages": "中文、英文"
     },
     "text-embedding-m3e-base": {
         "description": "M3E基础嵌入模型（本地）",
         "provider": "local",
         "name": "text-embedding-m3e-base",
         "dimensions": 768,
-        "batch_size": 512
+        "max_tokens": 512,
+        "batch_size": 512,
+        "languages": "中文、英文"
     },
     "text-embedding-granite-embedding-278m-multilingual": {
         "description": "Granite多语言嵌入模型（本地）",
         "provider": "local",
         "name": "text-embedding-granite-embedding-278m-multilingual",
         "dimensions": 768,
-        "batch_size": 512
+        "max_tokens": 512,
+        "batch_size": 512,
+        "languages": "多语言（英文、德文、西班牙文、法文、日文、葡萄牙文、阿拉伯文、捷克文、意大利文、韩文、荷兰文、中文等）"
+    },
+    # "jina-embeddings-v2-base-zh" : {
+    #     "description": "Jina开源的中英双语嵌入模型",
+    #     "provider": "local",
+    #     "name": "jina-embeddings-v2-base-zh",
+    #     "dimensions": 768,
+    #     "max_tokens": 512,
+    #     "batch_size": 512,
+    #     "languages": "中文、英文"
+    # },
+    "text-embedding-multilingual-e5-large-instruct" : {
+        "description": "E5大型多语言嵌入模型",
+        "provider": "local",
+        "name": "text-embedding-multilingual-e5-large-instruct",
+        "dimensions": 1024,
+        "max_tokens": 512,
+        "batch_size": 512,
+        "languages": "多语言"
     },
     
     # 其他可能通过自定义API端点使用的模型
@@ -81,44 +119,65 @@ AVAILABLE_MODELS = {
         "provider": "custom",
         "name": "m3e-large",
         "dimensions": 1024,
-        "batch_size": 512
+        "max_tokens": 512,
+        "batch_size": 512,
+        "languages": "中文、英文"
     },
 
     # 新增模型
+    "text-embedding-3-large": {
+        "description": "OpenAI第三代大型嵌入模型",
+        "provider": "openai",
+        "name": "text-embedding-3-large",
+        "dimensions": 3072,
+        "max_tokens": 8191,
+        "batch_size": 2048,
+        "languages": "多语言"
+    },
     "hunyuan": {
         "description": "腾讯混元嵌入模型",
         "provider": "custom",
         "name": "hunyuan-embedding",
         "dimensions": 1024,
-        "batch_size": 10  # 调整为8，已测试可行
+        "max_tokens": 1024,
+        "batch_size": 10,  # 联系客服说只支持10，官网写200...
+        "languages": "中文、英文"
     },
     "doubao": {
         "description": "豆包嵌入模型",
         "provider": "custom",
         "name": "doubao-embedding-large-text-240915",
         "dimensions": 1024,
-        "batch_size":256 
+        "max_tokens": 4096,
+        "batch_size": 256,
+        "languages": "中文、英文"
     },
     "baichuan": {
         "description": "百川嵌入模型",
         "provider": "custom",
         "name": "Baichuan-Text-Embedding",
         "dimensions": 1024,
-        "batch_size": 16  # 错误信息显示最多16
+        "max_tokens": 512,
+        "batch_size": 16,  # 错误信息显示最多16
+        "languages": "中文、英文"
     },
     "qwen": {
         "description": "通义千问嵌入模型",
         "provider": "custom",
         "name": "text-embedding-v3",
         "dimensions": 1024,
-        "batch_size": 10  # 错误信息显示最多10
+        "max_tokens": 8192, # 单字符串时支持8192，多字符串时支持2048
+        "batch_size": 10,  # 错误信息显示最多10
+        "languages": "中文、英文"
     },
     "baidu": {
         "description": "百度嵌入模型",
         "provider": "custom",
         "name": "Embedding-V1",
         "dimensions": 1024,
-        "batch_size": 8  # 保守估计
+        "max_tokens": 384, # 384token且不超过1000字节
+        "batch_size": 16,  # 保守估计
+        "languages": "中文、英文"
     }
 }
 
